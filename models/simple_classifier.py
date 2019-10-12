@@ -35,9 +35,8 @@ class BertForSequenceClassification(BertPreTrainedModel):
             return logits
 
 
-
 class ElmoSequenceClassification(torch.nn.Module):
-    def __init__(self, config, num_labels):
+    def __init__(self, num_labels):
         exit()
         super(ElmoSequenceClassification, self).__init__()
         self.elmo_encoder = Elmo(options_file, weight_file, 2, dropout=0)
@@ -47,18 +46,13 @@ class ElmoSequenceClassification(torch.nn.Module):
         self.b = torch.autograd.Variable(torch.tensor(0.5))
         self.config = {}
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None, labels=None, sim_features=None):
+    def forward(self, input_ids, attention_mask=None, labels=None):
         encoded_output = self.elmo_encoder(input_ids)
-        # print(encoded_output.keys())
         a, b = encoded_output['elmo_representations']
-        encoded_output = a #self.a*a + self.b*b
+        encoded_output = a
         states, encoded_output = self.gru(encoded_output)
-        #print(states.shape)
-        #print(attention_mask.shape)
-        encoded_output = attention_mask.view(-1, 30, 1).type(torch.cuda.FloatTensor)*states #torch.cat([encoded_output[0], encoded_output[1]], dim=-1)
-        #print(encoded_output.shape)
+        encoded_output = attention_mask.view(-1, 30, 1).type(torch.cuda.FloatTensor)*states
         encoded_output = torch.sum(encoded_output, dim=1)
-        #print(encoded_output.shape)
         logits = self.classifier(encoded_output)
         if labels is not None:
             loss_fct = torch.nn.CrossEntropyLoss()
