@@ -3,6 +3,7 @@ import pandas as pd
 from glob import glob
 import json
 import os
+from tqdm import tqdm
 
 
 def read_texts(file_path):
@@ -14,13 +15,20 @@ def read_texts(file_path):
     return texts
 
 
+def read_annotations(file_path):
+    annotation_data = pd.read_csv(file_path, sep='\t| {4,}', skip_blank_lines=True, comment='#', encoding='utf-8',
+                                  names=['token_id', 'token_span', 'token', 'entity_id', 'entity_type',
+                                         'unknown_1', 'unknown_2'], engine='python')
+    return annotation_data
+
+
 def get_text_from_spans(entity, sentences):
     sentence = sentences[entity['sentence_id']]
     return sentence[entity['start']:entity['end']]
 
 
 def get_entities_spans(annotation_data):
-    annotation_data['sentence_id'] = annotation_data.token_id.apply(lambda tid: int(tid.split('-')[0]))
+    annotation_data['sentence_id'] = annotation_data.token_id.apply(lambda tid: int(tid.split('-')[0]) - 1)
     annotation_data['entity_type'] = annotation_data.entity_type.apply(lambda eid: eid[:-3])
     annotation_data['start'] = annotation_data.token_span.apply(lambda tid: int(tid.split('-')[0]))
     annotation_data['end'] = annotation_data.token_span.apply(lambda tid: int(tid.split('-')[1]))
@@ -39,11 +47,11 @@ def get_entities_spans(annotation_data):
 
 
 def parse_sentences(file_path):
+    parent_directory = os.path.dirname(file_path)
+    parent_directory = os.path.basename(parent_directory)
     resulting_data = []
     sentences = read_texts(file_path)
-    annotation_data = pd.read_csv(file_path, sep='\t', skip_blank_lines=True, comment='#', encoding='utf-8',
-                                  names=['token_id', 'token_span', 'token', 'entity_id', 'entity_type',
-                                         'unknown_1', 'unknown_2'])
+    annotation_data = read_annotations(file_path)
     entities_spans = get_entities_spans(annotation_data)
     entities_spans['entity_text'] = entities_spans.apply(get_text_from_spans, args=(sentences,), axis=1)
     for sentence_id, sentence in enumerate(sentences):
@@ -52,7 +60,7 @@ def parse_sentences(file_path):
         resulting_data.append({
             'text': sentence,
             'sentence_id': sentence_id,
-            'file_name': os.path.basename(file_path),
+            'file_name': parent_directory,
             'entities': sentence_annotations.to_dict(orient='records')
         })
     return resulting_data
@@ -65,8 +73,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     output_data = []
-    file_pattern = os.path.join(args.input_folder, '*')
-    for file_path in glob(file_pattern):
+    file_pattern = os.path.join(args.input_folder, '*', '*.tsv')
+    for file_path in tqdm(glob(file_pattern)):
         sentences = parse_sentences(file_path)
         output_data += sentences
 
